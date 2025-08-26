@@ -1,0 +1,8 @@
+{
+  "name": "memo-vocale-backend",
+  "version": "1.0.0",
+  "dependencies": {
+    "@deepgram/sdk": "^3.3.3",
+    "@google/generative-ai": "^0.8.0"
+  }
+}
