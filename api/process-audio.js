@@ -23,7 +23,7 @@ exports.default = async function (request) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     const prompt = `Dato il testo, estrai un JSON con: "punti_salienti" (array di stringhe), "cose_da_fare" (array di stringhe), "appuntamenti" (array di oggetti con "descrizione"). Testo: "${transcribedText}"`;
 
