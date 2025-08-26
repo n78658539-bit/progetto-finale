@@ -3,6 +3,7 @@ const { createClient } = require("@deepgram/sdk");
 
 exports.default = async function (request) {
   try {
+    // 1. Trascrizione con Deepgram (veloce)
     const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
     const audioBuffer = await request.buffer();
 
@@ -22,10 +23,11 @@ exports.default = async function (request) {
       );
     }
 
+    // 2. Analisi con Gemini (modello veloce e prompt semplice)
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" }); // Modello più veloce
 
-    const prompt = `Dato il testo, estrai un JSON con: "punti_salienti" (array di stringhe), "cose_da_fare" (array di stringhe), "appuntamenti" (array di oggetti con "descrizione"). Testo: "${transcribedText}"`;
+    const prompt = `Analizza: "${transcribedText}". Estrai JSON con chiavi "punti_salienti", "cose_da_fare", "appuntamenti". Sii breve.`; // Prompt più semplice
 
     const resultGemini = await model.generateContent(prompt);
     const jsonText = resultGemini.response.text();
