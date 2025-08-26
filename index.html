@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memo Vocale Intelligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .pulse { animation: pulse-animation 2s infinite; }
+        @keyframes pulse-animation {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Memo Vocale Intelligente</h1>
+            <p id="status" class="text-gray-500 mt-2">Clicca per registrare</p>
+        </header>
+
+        <main>
+            <div class="flex flex-col items-center justify-center mb-8">
+                <button id="recordButton" class="w-24 h-24 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg focus:outline-none focus:ring-4 focus:ring-red-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" viewBox="0 0 20 20" fill="currentColor"><path d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm5 2a1 1 0 11-2 0V4a1 1 0 112 0v2zM10 15a4 4 0 004-4v-1h-1.5v1a2.5 2.5 0 01-5 0v-1H6v1a4 4 0 004 4z" /></svg>
+                </button>
+            </div>
+
+            <div id="audioControls" class="hidden mb-8 text-center space-y-4">
+                 <audio id="audioPlayer" controls class="w-full max-w-md mx-auto"></audio>
+            </div>
+
+            <div id="results" class="space-y-6">
+                <div id="loading" class="hidden text-center py-8">
+                    <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                    <p class="mt-4 text-lg font-semibold text-indigo-600">Analisi in corso...</p>
+                </div>
+                <div id="resultCards" class="grid md:grid-cols-3 gap-6">
+                    <div><h2 class="text-xl font-semibold mb-4 text-indigo-700">Punti Salienti</h2><ul id="keyPoints"></ul></div>
+                    <div><h2 class="text-xl font-semibold text-green-700">Lista Cose da Fare</h2><ul id="todoList"></ul></div>
+                    <div><h2 class="text-xl font-semibold text-blue-700">Appuntamenti</h2><ul id="appointments"></ul></div>
+                </div>
+                 <div id="errorMessage" class="hidden bg-red-100 p-4 rounded-lg"><strong class="font-bold">Errore!</strong> <span id="errorText"></span></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const recordButton = document.getElementById('recordButton');
+        const status = document.getElementById('status');
+        const audioControls = document.getElementById('audioControls');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const loading = document.getElementById('loading');
+        const resultCards = document.getElementById('resultCards');
+        const keyPointsList = document.getElementById('keyPoints');
+        const todoList = document.getElementById('todoList');
+        const appointmentsList = document.getElementById('appointments');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+
+        let isRecording = false;
+        let mediaRecorder;
+        let audioChunks = [];
+
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                isRecording = true;
+                updateUIRecording(true);
+                audioChunks = [];
+                resetUI();
+                mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    audioPlayer.src = URL.createObjectURL(audioBlob);
+                    audioControls.classList.remove('hidden');
+                    processAudio(audioBlob);
+                };
+                mediaRecorder.start();
+            } catch (err) { showError("Permesso microfono negato."); }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder) mediaRecorder.stop();
+            isRecording = false;
+            updateUIRecording(false);
+        }
+
+        async function processAudio(audioBlob) {
+            loading.classList.remove('hidden');
+            resultCards.classList.add('hidden');
+            status.textContent = 'Analisi in corso...';
+            try {
+                const response = await fetch('/api/process-audio', {
+                    method: 'POST',
+                    body: audioBlob,
+                    headers: { 'Content-Type': 'application/octet-stream' }
+                });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Errore generico dal server.');
+                }
+                const data = await response.json();
+                displayResults(data);
+            } catch (error) { showError(error.message);
+            } finally {
+                loading.classList.add('hidden');
+                status.textContent = 'Clicca per registrare';
+            }
+        }
+
+        function displayResults(data) {
+            resultCards.classList.remove('hidden');
+            keyPointsList.innerHTML = data.punti_salienti?.map(i => `<li>${i}</li>`).join('') || '<li>Nessuno.</li>';
+            todoList.innerHTML = data.cose_da_fare?.map(i => `<li>${i}</li>`).join('') || '<li>Nessuna.</li>';
+            appointmentsList.innerHTML = data.appuntamenti?.map(i => `<li>${i.descrizione}</li>`).join('') || '<li>Nessuno.</li>';
+        }
+
+        function updateUIRecording(isRec) {
+            recordButton.classList.toggle('pulse', isRec);
+            status.textContent = isRec ? 'Registrazione in corso...' : 'Elaborazione...';
+        }
+
+        function resetUI() {
+            errorMessage.classList.add('hidden');
+            audioControls.classList.add('hidden');
+            resultCards.classList.add('hidden');
+        }
+
+        function showError(message) {
+            errorMessage.classList.remove('hidden');
+            errorText.textContent = message;
+            loading.classList.add('hidden');
+        }
+
+        recordButton.addEventListener('click', () => isRecording ? stopRecording() : startRecording());
+    });
+    </script>
+</body>
+</html>
